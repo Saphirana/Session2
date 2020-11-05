@@ -1,0 +1,381 @@
+---
+title: "Hausaufgabe 2"
+output: html_notebook
+---
+```{r}
+library(tidyverse)
+```
+
+```{r}
+BX_Book_Ratings <- read_delim("BX-Book-Ratings.csv", 
+    ";", escape_double = FALSE, trim_ws = TRUE)
+BX_Books <- read_delim("BX-Books.csv", 
+    ";", escape_double = FALSE, trim_ws = TRUE)
+BX_Users <- read_delim("BX-Users.csv", 
+    ";", escape_double = FALSE, trim_ws = TRUE)
+```
+
+```{r}
+books <- BX_Books %>%
+  select(ISBN,`Book-Title`,`Book-Author`,`Year-Of-Publication`,Publisher)
+```
+
+
+```{r}
+users <- BX_Users %>%
+  mutate(Age = as.numeric(Age))
+```
+```{r}
+rm(BX_Users)
+```
+
+```{r}
+ratings <- BX_Book_Ratings %>%
+  left_join(BX_Books)
+```
+```{r}
+rm(BX_Books)
+```
+```{r}
+head(ratings)
+
+```
+```{r}
+rm(BX_Book_Ratings)
+```
+
+
+```{r}
+ratings <- ratings %>%
+  filter(!is.na(`Book-Title`))
+
+```
+```{r}
+books <- books %>%
+  filter(!is.na(`Book-Title`))
+```
+
+
+```{r}
+ratings_per_user <- ratings %>%
+  group_by(`User-ID`) %>%
+  summarize(n = n()) %>%
+  arrange(desc(n))
+
+```
+```{r}
+head(ratings_per_user)
+```
+
+```{r}
+users <- users %>%
+  left_join(ratings_per_user) %>%
+  filter(n > 0)
+```
+
+```{r}
+head(users)
+```
+
+```{r}
+users <- users %>%
+  filter(!is.na(Age)) %>%
+  mutate(country = str_remove(Location,".*,")) %>%
+  filter(country != "")
+head(users)
+```
+
+```{r}
+users %>%
+  group_by(country) %>%
+  summarize(n = n()) %>%
+  arrange(desc(n))
+```
+
+
+```{r}
+users <- users %>%
+  mutate(country = str_extract(country, "\\w+"))
+```
+
+```{r}
+(ratings.distribution <- ratings %>%
+  group_by(`User-ID`) %>%
+  summarize(n = n()) %>%
+  arrange(desc(n)) %>%
+  group_by(n) %>%
+  summarize(m = n()) )
+```
+
+```{r}
+hist(ratings.distribution$n, breaks=100)
+```
+
+
+```{r}
+ratings %>%
+  group_by(Publisher) %>%
+  filter(`Book-Rating` > 0) %>%
+  summarise(dieBestenBuecher = median(`Book-Rating`), wieviele = n()) %>%
+  arrange(desc(dieBestenBuecher), desc(wieviele)) %>%
+  filter(wieviele > 10)  %>%
+  head(.,10)
+```
+
+
+
+
+# Gibt es eine lineare Beziehung zwischen Anzahl Bücher pro Publisher und Anzahl Ratings, die die Bücher eines Publishers erhalten? (hier müssen Sie wieder etwas Data Wrangling betreiben)
+
+
+```{r}
+ratings_per_publisher <- ratings %>%
+  filter(!is.na(Publisher)) %>%
+  group_by(`Publisher`) %>%
+  summarize(Ratings_Total = n()) %>%
+  arrange(desc(Ratings_Total))
+```
+
+```{r}
+ratings_per_publisher
+```
+
+
+```{r}
+books_per_publisher <- books %>%
+  filter(!is.na(Publisher)) %>%
+  group_by(`Publisher`) %>%
+  summarize(Book_Total = n()) %>%
+  arrange(desc(Book_Total))
+
+```
+
+```{r}
+books_per_publisher 
+
+```
+
+
+
+```{r}
+books_ratings_per_publisher <- books_per_publisher %>%
+  left_join(ratings_per_publisher)
+```
+```{r}
+Test <- books_ratings_per_publisher %>%
+  select(`Book_Total`, `Ratings_Total`)
+  
+```
+```{r}
+Test
+```
+
+
+
+
+```{r}
+fit <- lm(Test$Ratings_Total ~ Test$Book_Total)
+```
+
+
+```{r}
+plot(Test)
+```
+
+
+```{r}
+lm(Test$Ratings_Total ~ Test$Book_Total)
+```
+
+
+```{r}
+plot(Test)
+abline(fit)
+```
+
+
+```{r}
+summary(fit)
+```
+
+
+Da ich von linaren Regression Nichts verstehe, kann ich die Frage nicht wirklich beantworten. Ich freue mich jedoch ein Diagramm erstellt zu haben.
+
+Ich vermute, dass es eine liniare Beziehung gibt, da der R-Wert mit 0,757 nah an 1 ist.
+
+Allerdings kann man die Theorie auch aufstellen, dass ein Publisher mit vielen Büchern mehr Ratings hat. Dennoch kann es natürlich sein, dass diese Bücher nicht im Trend sind, oder einfach die Zielgruppe keine Ratings dafür abgibt, oder oder oder. 
+
+
+
+
+# Haben ältere Bücher mehr Ratings, weil sie mehr Zeit haben, um Ratings zu sammeln? (muss nicht unbedingt mit einer linearen Regression analysiert werden)
+
+
+Je älter desto mehr, rating abhänig (y), Alter unabhänig (x)
+
+```{r}
+ratings_per_book <- ratings %>%
+  filter(!is.na(`Book-Title`)) %>%
+  group_by(`Book-Title`) %>%
+  summarize(Ratings_Total = n()) %>%
+  arrange(desc(Ratings_Total))
+```
+
+
+```{r}
+ratings_per_book <- ratings_per_book %>%
+  filter(!is.na(Ratings_Total)) %>%
+  filter(Ratings_Total > 0)
+```
+
+  
+```{r}
+years_per_book <- books %>%
+  select(`Year-Of-Publication`,`Book-Title`)
+```
+
+```{r}
+years_per_book <- years_per_book %>%
+  filter(`Year-Of-Publication` > 1200) %>%
+  filter(`Year-Of-Publication` < 2021) %>%
+  mutate(book_age = 2020 - `Year-Of-Publication`)
+  
+  
+```
+
+```{r}
+years_per_book <- years_per_book %>%
+  select(`Book-Title`,book_age)
+```
+
+
+```{r}
+test4 <- years_per_book %>%
+  left_join(ratings_per_book)
+```
+```{r}
+book_age_rating <- test4 %>%
+  select(book_age,Ratings_Total)
+```
+
+```{r}
+plot(book_age_rating)
+```
+
+
+```{r}
+fit4 <- lm(book_age_rating$Ratings_Total ~ book_age_rating$book_age)
+```
+
+```{r}
+lm(book_age_rating$Ratings_Total ~ book_age_rating$book_age)
+```
+
+```{r}
+plot(book_age_rating)
+abline(fit4)
+```
+```{r}
+summary(fit4)
+```
+
+
+
+Da der R-Wert weit von der 1 entfernt ist, kann man hier sagen, dass keine lineare Beziehung zwischen dem "Alter" bzw. der Zeit die das Buch hatte um Ratings zu sammeln und der Anzahl der Ratings die das Buch erhalten hat, gibt. 
+
+Allerdings stelle ich hier die Vermutung an, dass ich hier einen Fehler gemacht habe oder mein Gedankengang fehlerhaft ist, denn in der Theorie müsste ja ein Bücher, welches z. B. 10 Jahre auf dem Markt ist mehr Ratings haben, als ein Buch welches letzten Monat erschienen ist. 
+
+Ein weiterer Gedanke wäre allerdings ebenfalls, dass es Bestseller mit einer großen Fangemeinde gibt die als Digitalnatives wesentlich mehr wert auf Rating und Mitteilung ihrer Meinung setzen, und somit eine höhere Zahl in kurze Zeit entsteht. Im Umkehrschluss sammeln Lexika oder einfach Ladenhüter die nicht aktuell oder "interessant" sind keine Ratings und zeigen, dann dass der Ansatz mehr Zeit, mehr Ratings nicht ganz korrekt ist. 
+
+Wie immer spielen mehr Faktoren und vor allem der Kontext ebenfalls eine Rolle und nicht nur "nackte" Zahlen. 
+
+
+Als Feedback würde ich Ihnen gerne noch mitgeben, dass ich diese Aufgabe für einen "Anfängerkurs" persönlich sehr schwer fand, auch wenn man vorraussetzen muss, dass Studenten sich auch alleine viel erarbeiten müssen. 
+
+
+
+
+
+
+
+
+
+
+# Versuche
+
+```{r}
+fit2 <- lm(test2$`Year-Of-Publication` ~ test2$Rating_T)
+```
+```{r}
+plot(test2)
+abline(fit2)
+```
+
+```{r}
+ratings_per_book <- ratings %>%
+  filter(!is.na(`Book-Title`)) %>%
+  group_by(`Book-Title`) %>%
+  summarize(Ratings_Total = n()) %>%
+  arrange(desc(Ratings_Total))
+```
+
+
+
+
+
+
+```{r}
+book_year <- ratings %>%
+  select(`Book-Title`,`Year-Of-Publication`)
+```
+```{r}
+book_year <- book_year %>%
+  group_by(`Book-Title`)
+```
+```{r}
+book_year
+```
+
+```{r}
+test2 <- ratings %>%
+  filter(!is.na(`Year-Of-Publication`)) %>%
+  group_by(`Year-Of-Publication`, `Book-Title`) %>%
+  summarize(Year_T = n()) %>%
+  arrange(desc(Year_T))
+```
+
+```{r}
+test2 <- ratings %>%
+  filter(!is.na(`Book-Title`)) %>%
+  group_by(`Year-Of-Publication`, `Book-Title`) %>%
+  summarize(Rating_T = n()) %>%
+  arrange(desc(Rating_T)) %>%
+  arrange(desc(`Year-Of-Publication`))
+```
+
+```{r}
+test2 <- test2 %>%
+  select(`Year-Of-Publication`,Rating_T)
+```
+
+```{r}
+test2
+```
+
+
+
+
+```{r}
+fit2 <- lm(test2$`Year-Of-Publication` ~ test2$Rating_T)
+```
+
+```{r}
+plot(test2)
+abline(fit2)
+```
+
+```{r}
+summary(fit2)
+```
+
+
