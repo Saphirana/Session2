@@ -1,0 +1,268 @@
+---
+title: "Beispiel-Notebook EDA / Data Science 3. Session"
+output:
+  html_document:
+    df_print: paged
+---
+
+
+
+```{r}
+library(tidyverse)
+library(arules)
+library(arulesViz)
+```
+
+
+```{r}
+all <- read_csv("all.csv")
+```
+
+```{r message=FALSE}
+i <- split(all$`Book-Title`,all$`User-ID`)
+txn <- as(i, "transactions")
+basket_rules <- apriori(txn, parameter = list(sup = 0.0015, conf = 0.001, minlen=2, target="rules"))
+```
+
+
+
+```{r}
+myRules_Direct <- as(basket_rules, "data.frame")
+basket_rules_hi <- head(basket_rules, by ="lift",100)
+head(myRules_Direct, 20)
+```
+
+
+```{r}
+plot(basket_rules_hi, method="graph", main="Books")
+```
+
+
+```{r}
+plot(basket_rules_hi, method="graph", main="Books", engine="interactive")
+```
+
+    
+    
+# Erstellen Sie eine Analyse, bei der nicht die Bücher, sondern die Autoren in den Transaktionen enthalten sind
+
+
+```{r message=FALSE}
+i <- split(all$`Book-Author`,all$`User-ID`)
+txn <- as(i, "transactions")
+basket_rules <- apriori(txn, parameter = list(sup = 0.0015, conf = 0.001, minlen=2, target="rules"))
+```
+```{r}
+myRules_Direct <- as(basket_rules, "data.frame")
+basket_rules_hi <- head(basket_rules, by ="lift",100)
+head(myRules_Direct, 20)
+```
+```{r}
+plot(basket_rules_hi, method="graph", main="Au")
+```
+
+
+
+```{r}
+plot(basket_rules_hi, method="graph", main="Author", engine="interactive")
+```
+
+
+# Fällt Ihnen etwas in der Datenqualität auf?
+
+Wenn man sich den Datensatz anschaut und ihn zunächst nach dem höchsten Support filtert, dann fällt gleich auf, dass der Autor John Grisham, mehrfach vorkommt. Dies allerdings nicht nur, weil viele Beziehung zu ihm bestehen sondern, weil sein Name einmal komplett in Versalien erfasst wurde und in der "normalen" Schreibweise. Gleiches gilt für die Autorin Sophie Kinsella, die dadurch eine starke Beziehung zu sich selbst führt. Ähnlich verhält es sich mit der Groß- und Kleinschreibung bei Tim LaHaye und Tim Lahaye auch er hat einen sehr hohen Lift. 
+
+
+# Wie könnte man das mit regulären Ausdrücken beheben?
+
+Ich vermute, dass man hier die einzelnen Autoren auf einen gemeinsamen Nenner bringen müsste, damit nur eine Schreibweise des Autors zu den einzelnen Buchtiteln gematcht würde. 
+
+Hier habe ich mich Ihres Skriptes bedient und die Daten nun zumindest bezüglich der Groß- und Kleinschreibung bereinigt. Auch wenn Sie zuvor meinten, wir sollten nicht ihren Code kopieren, habe ich mich dennoch entschieden hier diesen Schritt zu kopieren, denn ich finde ihn hier für die von mir zuvor gedachte Problematik am sinnigsten. 
+
+```{r}
+all %>%
+  select(`Book-Author`) %>%
+  mutate(bereinigt = ifelse(grepl("[A-Z]{2}", `Book-Author`), str_to_title(`Book-Author`),`Book-Author`)) 
+```
+```{r}
+all <- all %>%
+  mutate(`Book-Author`= ifelse(grepl("[A-Z]{2}", `Book-Author`), str_to_title(`Book-Author`),`Book-Author`)) 
+```
+
+
+```{r}
+ all %>%
+  select(`Book-Title`) %>%
+  mutate(bereinigt = ifelse(grepl("[A-Z]{2}", `Book-Title`), str_to_title(`Book-Title`),`Book-Title`)) 
+```
+
+
+```{r}
+all <- all %>%
+  mutate(`Book-Title`= ifelse(grepl("[A-Z]{2}", `Book-Title`), str_to_title(`Book-Title`),`Book-Title`)) 
+```
+
+
+
+
+```{r}
+i <- split(all$`Book-Author`,all$`User-ID`)
+txn <- as(i, "transactions")
+basket_rules <- apriori(txn, parameter = list(sup = 0.0015, conf = 0.001, minlen=2, target="rules"))
+basket_rules_hi <- head(basket_rules, by ="lift",100)
+plot(basket_rules_hi, method="graph", main="Author")
+```
+
+Hier würde ich gerne noch einmal die Frage stellen, wie es möglich ist, bei dem Guten Herrn LaHaye den Namen klein zu schreiben. Ich hatte des Weiteren noch die Überlegung, dass es eventuell sinnvoll wäre einfach sämtliche Charakter klein zu schreiben. 
+
+```{r}
+all %>%
+  select(`Book-Author`) %>%
+  mutate(bereinigt = ifelse(grepl("[A-Z]{2}", `Book-Author`), str_to_lower(`Book-Author`),`Book-Author`)) 
+```
+
+
+```{r}
+ all <- all%>%
+  mutate(`Book-Author` = ifelse(grepl("[A-Z]{2}", `Book-Author`), str_to_lower(`Book-Author`),`Book-Author`)) 
+```
+
+Ich hatte hier die Vermutung angestellt, dass man mit dem Befehl "st_to_lower" evenutell alle klein bekommt, dies scheint falsch zu sein. 
+
+Ist es möglich mit dem Befehl "tolower" sämtliche Charakter klein zu schreiben? Und wäre dies sinnvoll? Bei dem Versuch dies umzusetzen, wollte mein RStudio nicht mehr, vielleicht könnten Sie mit da weiter helfen. 
+
+
+# Wie kann man nun noch sicherstellen, dass nur die Autoren weiterempfohlen werden, deren Bücher man auch (mehrheitlich) gut fand?
+
+Man könnte hier in der all-Datei die Ratinghöhe als z.B. größer als 5 definieren und dies in Zusammenhang bzw. zusätzlich mit der Anzahl der Ratings pro User verbinden. 
+
+Es ist ein bisschen unglücklich, dass ich hier m. E. nach einfach mal hätte umsetzen müssen was ich zuvor geschrieben habe. 
+
+```{r}
+best_authors <- all %>%
+  filter(`Book-Rating` > 0) %>%
+  group_by(`Book-Author`, `Book-Title`) %>%
+  mutate(num_ratings = n()) %>%
+  filter(num_ratings > 5) %>%
+  mutate(median_rating = median(`Book-Rating`)) %>%
+  filter(median_rating > 6)
+```
+
+
+```{r}
+i <- split(best_authors$`Book-Author`,best_authors$`User-ID`)
+txn <- as(i, "transactions")
+basket_rules <- apriori(txn, parameter = list(sup = 0.0015, conf = 0.001, minlen=2, target="rules"))
+basket_rules_hi <- head(basket_rules, by ="lift",100)
+plot(basket_rules_hi, method="graph", main="Best_Author")
+```
+
+
+```{r}
+best_authors2 <- all %>%
+  filter(`Book-Rating` > 5) %>%
+  group_by(`Book-Author`, `Book-Title`) %>%
+  mutate(num_ratings = n()) %>%
+  filter(num_ratings > 5) %>%
+  mutate(median_rating = median(`Book-Rating`)) %>%
+  filter(median_rating > 6)
+```
+```{r}
+i <- split(best_authors2$`Book-Author`,best_authors2$`User-ID`)
+txn <- as(i, "transactions")
+basket_rules <- apriori(txn, parameter = list(sup = 0.0015, conf = 0.001, minlen=2, target="rules"))
+basket_rules_hi <- head(basket_rules, by ="lift",100)
+plot(basket_rules_hi, method="graph", main="Best_Author")
+```
+
+# Welche anderen Analysen wären sinnvoll?
+    
+Hier ist die Frage zunächst was unter Features zu verstehen wäre. Wenn man vom Warenkorb ausgeht, fände ich ein Feature sinnvoll, welches nicht nur die Frage:" Kunden, die das gekauft haben, haben auch das gekauft" beantwortet sondern die Verbindung zu einem anderen Warenkorb herstellt, um somit die Auswahl mit neuem Input zu bestücken. Beispielsweise man liest nur "Fantasy" und bekommt dementsprechend eher dieses Genre vorgeschlagen aber zusätzlich "probieren sie etwas neues" und dort sind Krimis enthalten. 
+
+Da ich hier den Begriff Features falsch verstanden habe, ist die vorherige Antwort nicht ganz so passend. In Ihrer Lösung hatten Sie vorgeschlagen das Alter in die Analyse mit aufzunehmen bzw. die Frage zu beantworten ob ältere Nutzer andere Bücher toll finden als jüngere. 
+
+```{r}
+all %>%
+  filter(`Book-Rating` > 0) %>%
+  filter(Age > 50) %>%
+  group_by(`Book-Title`) %>%
+  summarize(median_rating = median(`Book-Rating`), n = n()) %>%
+  arrange(desc(median_rating), desc(n))
+```
+
+```{r}
+all %>%
+  filter(`Book-Rating` > 0) %>%
+  filter(Age < 51) %>%
+  group_by(`Book-Title`) %>%
+  summarize(median_rating = median(`Book-Rating`), n = n()) %>%
+  arrange(desc(median_rating), desc(n))
+```
+
+# Eigener Versuch
+
+Abgeleitet davon, wäre es doch auch interessant zu wissen, welche Bücher Nutzer aus den USA und Deutschland toll fänden. 
+
+```{r}
+authors_usa <- all %>%
+  filter(`country` == "usa") %>%
+  group_by(`Book-Author`, `Book-Title`)
+```
+
+```{r}
+i_usa <- split(authors_usa$`Book-Author`,authors_usa$`User-ID`)
+txn_usa <- as(i_usa, "transactions")
+basket_rules_usa <- apriori(txn_usa, parameter = list(sup = 0.0015, conf = 0.001, minlen=2, target="rules"))
+basket_rules_hi_usa <- head(basket_rules_usa, by ="lift",100)
+plot(basket_rules_hi_usa, method="graph", main="Author_USA")
+
+```
+```{r}
+authors_usa %>%
+  filter(`Book-Rating` > 0) %>%
+  filter(Age > 50) %>%
+  group_by(`Book-Title`) %>%
+  summarize(median_rating = median(`Book-Rating`), n = n()) %>%
+  arrange(desc(median_rating), desc(n))
+```
+```{r}
+authors_usa %>%
+  filter(`Book-Rating` > 0) %>%
+  filter(Age < 51) %>%
+  group_by(`Book-Title`) %>%
+  summarize(median_rating = median(`Book-Rating`), n = n()) %>%
+  arrange(desc(median_rating), desc(n))
+```
+
+```{r}
+
+authors_germany <- all %>%
+  filter(`country` == "germany") %>%
+  group_by(`Book-Author`, `Book-Title`)
+  
+```
+
+```{r}
+i_ger <- split(authors_germany$`Book-Author`,authors_germany$`User-ID`)
+txn_ger <- as(i_ger, "transactions")
+basket_rules_ger <- apriori(txn_ger, parameter = list(sup = 0.0015, conf = 0.001, minlen=2, target="rules"))
+basket_rules_hi_ger <- head(basket_rules_ger, by ="lift",100)
+plot(basket_rules_hi_ger, method="graph", main="Author_GER")
+```
+```{r}
+authors_germany %>%
+  filter(`Book-Rating` > 0) %>%
+  filter(Age > 50) %>%
+  group_by(`Book-Title`) %>%
+  summarize(median_rating = median(`Book-Rating`), n = n()) %>%
+  arrange(desc(median_rating), desc(n))
+```
+```{r}
+authors_germany %>%
+  filter(`Book-Rating` > 0) %>%
+  filter(Age < 51) %>%
+  group_by(`Book-Title`) %>%
+  summarize(median_rating = median(`Book-Rating`), n = n()) %>%
+  arrange(desc(median_rating), desc(n))
+```
+
