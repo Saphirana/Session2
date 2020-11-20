@@ -1,0 +1,797 @@
+---
+title: "Hausaufgabe4"
+output:
+  html_document:
+    df_print: paged
+---
+
+# Libraries und Daten
+```{r}
+library(tidyverse)
+library(e1071)
+library(caret)
+library(pROC)
+```
+
+```{r}
+titanic <- read_delim("titanic.csv", ";", 
+    escape_double = FALSE, trim_ws = TRUE)
+```
+
+# Toms Skript
+
+# Class Imbalance Check
+
+```{r}
+titanic %>%
+  group_by(survived) %>%
+  summarize(n = n())
+```
+# 1. Versuch mit SVM mit 2 Variablen
+
+```{r}
+(titanic.df <- titanic %>%
+  select(survived,pclass,age))
+```
+
+```{r}
+titanic.df <- titanic.df %>%
+  mutate(age = as.numeric(str_replace(age,",",".")))
+```
+
+```{r}
+titanic.df <- na.omit(titanic.df)
+```
+
+```{r}
+set.seed(107)
+inTrain <- createDataPartition(
+  y = titanic.df$survived,
+  p = .8,
+  list = FALSE)
+training <- titanic.df[ inTrain,]
+testing  <- titanic.df[-inTrain,]
+```
+
+```{r}
+model <- svm(survived ~ ., data = training)
+summary(model)
+pred <- predict(model, testing[,-1], probability = FALSE)
+```
+
+```{r}
+(test.results <- cbind(pred, testing))
+```
+
+```{r}
+test.results2 <- test.results %>%
+  mutate(pred = ifelse(pred>=0.5,1,0))
+table(test.results2$pred, testing$survived)
+```
+
+
+```{r}
+pROC_obj <- roc(test.results$survived, test.results$pred,
+            smoothed = TRUE,
+            ci=TRUE, ci.alpha=0.9, stratified=FALSE,
+            plot=TRUE, auc.polygon=TRUE, max.auc.polygon=TRUE, grid=TRUE,
+            print.auc=TRUE, show.thres=TRUE)
+```
+
+# Mit mehr als zwei Features
+
+```{r}
+(titanic.df <- titanic %>%
+  select(survived,pclass,sex,age))
+```
+
+```{r}
+titanic.df <- titanic.df %>%
+  mutate(age = as.numeric(str_replace(age,",",".")))
+```
+
+```{r}
+titanic.df <- na.omit(titanic.df)
+```
+
+```{r}
+titanic.df <- titanic.df %>%
+  mutate(sex = ifelse(sex == "female", 1, 0))
+```
+
+```{r}
+set.seed(107)
+inTrain <- createDataPartition(
+  y = titanic.df$survived,
+  p = .8,
+  list = FALSE)
+training <- titanic.df[ inTrain,]
+testing  <- titanic.df[-inTrain,]
+```
+
+```{r}
+model <- svm(survived ~ ., data = training)
+summary(model)
+pred <- predict(model, testing[,-1], probability = FALSE)
+```
+
+```{r}
+(test.results <- cbind(pred, testing))
+```
+
+
+```{r}
+library(pROC)
+pROC_obj <- roc(test.results$survived, test.results$pred,
+            smoothed = TRUE,
+            ci=TRUE, ci.alpha=0.9, stratified=FALSE,
+            plot=TRUE, auc.polygon=TRUE, max.auc.polygon=TRUE, grid=TRUE,
+            print.auc=TRUE, show.thres=TRUE)
+```
+
+# Naive Bayes
+
+```{r}
+my_training <- training %>%
+  mutate(survived = as.factor(survived))%>%
+  mutate(sex = as.factor(sex))%>%
+  mutate(pclass = as.factor(pclass)) %>%
+  mutate(age = as.factor(age))
+model <- naiveBayes(survived ~ ., data = my_training)
+model
+```
+
+```{r}
+my_testing <- testing %>%
+  mutate(sex = as.factor(sex)) %>%
+  mutate(pclass = as.factor(pclass))%>%
+  mutate(age = as.factor(age))
+pred <- predict(model, my_testing)
+table(pred, my_testing$survived)
+```
+
+
+```{r}
+(test.results <- cbind(pred, my_testing))
+```
+
+```{r}
+test.results <- test.results %>%
+  mutate(pred = as.numeric(pred))
+pROC_obj <- roc(as.numeric(as.character(test.results$survived)), test.results$pred,
+            smoothed = TRUE,
+            ci=TRUE, ci.alpha=0.9, stratified=FALSE,
+            plot=TRUE, auc.polygon=TRUE, max.auc.polygon=TRUE, grid=TRUE,
+            print.auc=TRUE, show.thres=TRUE)
+```
+# Decision Tree
+
+```{r}
+library(rpart)
+library(rpart.plot)
+tree<- rpart(survived~., data = training, method = 'class')
+rpart.plot(tree)
+```
+```{r}
+dt_results <- predict(tree, testing[,-1], type = 'prob')
+head(model.results.dt <- cbind(testing,dt_results),500)
+```
+```{r}
+test.results2 <- test.results %>%
+  mutate(pred = ifelse(pred>=0.5,1,0))
+table(test.results2$pred, testing$survived)
+```
+
+
+```{r}
+pROC_obj <- roc(model.results.dt$survived,model.results.dt$`1`,
+            smoothed = TRUE,
+            # arguments for ci
+            ci=TRUE, ci.alpha=0.9, stratified=FALSE,
+            # arguments for plot
+            plot=TRUE, auc.polygon=TRUE, max.auc.polygon=TRUE, grid=TRUE,
+            print.auc=TRUE, show.thres=TRUE)
+```
+
+## Hausaufgabe: 
+
+# Bitte erstellen Sie ein Notebook mit weiteren Features (Alter, Geschlecht und Klasse sind als Beispiel in meinem Notebook auf GitHub)
+
+```{r}
+titanic  %>%
+  group_by(survived, sex, pclass, age) %>%
+  mutate(age = as.numeric(str_replace(age,",","."))) %>%
+  summarize(n = n())
+```
+
+
+```{r}
+
+(titanic.df <- titanic %>%
+  select(survived,sex, pclass,age)) %>%
+  mutate(age = as.numeric(str_replace(age,",","."))) %>%
+  mutate(sex = ifelse(sex == "female", 1, 0)) %>%
+  mutate(age = ifelse(age < 14, "child", "adult"))# %>%
+ # mutate(embarked = ifelse(embarked == "S", 0, ifelse(embarked == "C", 1, 2)))
+  
+
+```
+
+```{r}
+titanic.df <- na.omit(titanic.df) %>%
+  mutate(age = as.numeric(str_replace(age,",","."))) %>%
+  mutate(sex = ifelse(sex == "female", 1, 0)) %>%
+  mutate(age = ifelse(age < 14, "child", "adult")) #%>%
+ # mutate(embarked = ifelse(embarked == "S", 0, ifelse(embarked == "C", 1, 2)))
+  
+```
+
+```{r}
+set.seed(107)
+inTrain <- createDataPartition(
+  y = titanic.df$survived,
+  p = .8,
+  list = FALSE)
+training <- titanic.df[ inTrain,]
+testing  <- titanic.df[-inTrain,]
+```
+
+```{r}
+model <- svm(survived ~ ., data = training)
+summary(model)
+pred <- predict(model, testing[,-1], probability = FALSE)
+```
+
+```{r}
+(test.results <- cbind(pred, testing))
+```
+
+```{r}
+test.results2 <- test.results %>%
+  mutate(pred = ifelse(pred>=0.5,1,0))
+table(test.results2$pred, testing$survived)
+```
+
+
+```{r}
+pROC_obj <- roc(test.results$survived, test.results$pred,
+            smoothed = TRUE,
+            ci=TRUE, ci.alpha=0.9, stratified=FALSE,
+            plot=TRUE, auc.polygon=TRUE, max.auc.polygon=TRUE, grid=TRUE,
+            print.auc=TRUE, show.thres=TRUE)
+```
+
+
+#2. Versuch:
+
+```{r}
+
+(titanic2.df <- titanic %>%
+  select(survived,sex, pclass,age, embarked)) %>%
+  mutate(age = as.numeric(str_replace(age,",","."))) %>%
+  mutate(sex = ifelse(sex == "female", 1, 0)) %>%
+  mutate(embarked = ifelse(embarked == "S", 2, ifelse(embarked == "C", 3, 4)))
+```
+
+```{r}
+titanic2.df <- na.omit(titanic2.df) %>%
+  mutate(age = as.numeric(str_replace(age,",","."))) %>%
+  mutate(sex = ifelse(sex == "female", 1, 0)) %>%
+  mutate(embarked = ifelse(embarked == "S", 2, ifelse(embarked == "C", 3, 4)))
+```
+```{r}
+set.seed(107)
+inTrain2 <- createDataPartition(
+  y = titanic2.df$survived,
+  p = .8,
+  list = FALSE)
+training2 <- titanic2.df[ inTrain2,]
+testing2  <- titanic2.df[-inTrain2,]
+```
+```{r}
+model2 <- svm(survived ~ ., data = training2)
+summary(model2)
+pred2 <- predict(model2, testing2[,-1], probability = FALSE)
+```
+```{r}
+(test.results3 <- cbind(pred2, testing2))
+```
+```{r}
+test.results4 <- test.results3 %>%
+  mutate(pred2 = ifelse(pred2>=0.5,1,0))
+table(test.results4$pred, testing2$survived)
+```
+```{r}
+pROC_obj <- roc(test.results3$survived, test.results3$pred,
+            smoothed = TRUE,
+            ci=TRUE, ci.alpha=0.9, stratified=FALSE,
+            plot=TRUE, auc.polygon=TRUE, max.auc.polygon=TRUE, grid=TRUE,
+            print.auc=TRUE, show.thres=TRUE)
+```
+
+
+
+# 3. Versuch
+
+```{r}
+(titanic3.df <- titanic %>%
+  select(survived,pclass,fare,sex)) %>%
+  mutate(fare = as.numeric(str_replace(fare,",","."))) %>%
+  mutate(sex = ifelse(sex == "female", 1, 0))
+```
+
+```{r}
+titanic3.df <- na.omit(titanic3.df) %>%
+  mutate(fare = as.numeric(str_replace(fare,",","."))) %>%
+  mutate(sex = ifelse(sex == "female", 1, 0))
+```
+
+
+```{r}
+set.seed(107)
+inTrain3 <- createDataPartition(
+  y = titanic3.df$survived,
+  p = .8,
+  list = FALSE)
+training3 <- titanic3.df[ inTrain3,]
+testing3  <- titanic3.df[-inTrain3,]
+```
+```{r}
+model3 <- svm(survived ~ ., data = training3)
+summary(model3)
+pred3 <- predict(model3, testing3[,], probability = FALSE)
+```
+```{r}
+(test.results5 <- cbind(pred3, testing3))
+```
+
+```{r}
+test.results6 <- test.results5 %>%
+  mutate(pred3 = ifelse(pred3>=0.5,1,0))
+table(test.results6$pred, testing3$survived)
+```
+
+
+```{r}
+pROC_obj <- roc(test.results5$survived, test.results5$pred,
+            smoothed = TRUE,
+            ci=TRUE, ci.alpha=0.9, stratified=FALSE,
+            plot=TRUE, auc.polygon=TRUE, max.auc.polygon=TRUE, grid=TRUE,
+            print.auc=TRUE, show.thres=TRUE)
+```
+
+
+
+# Naive Bayes
+
+# 1. Versuch 
+
+```{r}
+my_training <- training %>%
+  mutate(survived = as.factor(survived))%>%
+  mutate(sex = as.factor(sex))%>%
+  mutate(pclass = as.factor(pclass)) %>%
+  mutate(age = as.factor(age))
+model <- naiveBayes(survived ~ ., data = my_training)
+model
+```
+
+```{r}
+my_testing <- testing %>%
+  mutate(sex = as.factor(sex)) %>%
+  mutate(pclass = as.factor(pclass))%>%
+  mutate(age = as.factor(age))
+pred <- predict(model, my_testing)
+table(pred, my_testing$survived)
+```
+
+
+```{r}
+(test.results <- cbind(pred, my_testing))
+```
+
+```{r}
+test.results <- test.results %>%
+  mutate(pred = as.numeric(pred))
+pROC_obj <- roc(as.numeric(as.character(test.results$survived)), test.results$pred,
+            smoothed = TRUE,
+            ci=TRUE, ci.alpha=0.9, stratified=FALSE,
+            plot=TRUE, auc.polygon=TRUE, max.auc.polygon=TRUE, grid=TRUE,
+            print.auc=TRUE, show.thres=TRUE)
+```
+
+# 2. Versuch
+
+
+```{r}
+my_training2 <- training2 %>%
+  mutate(survived = as.factor(survived))%>%
+  mutate(sex = as.factor(sex))%>%
+  mutate(pclass = as.factor(pclass)) %>%
+  mutate(age = as.factor(ifelse(age < 14, "child", "adult"))) %>%
+  mutate(embarked = as.factor(embarked))
+model2 <- naiveBayes(survived ~ ., data = my_training2)
+model2
+```
+```{r}
+my_testing2 <- testing2 %>%
+  mutate(sex = as.factor(sex)) %>%
+  mutate(pclass = as.factor(pclass))%>%
+  mutate(age = as.factor(ifelse(age < 14, "child", "adult"))) %>%
+  mutate(embarked = as.factor(embarked))
+pred2 <- predict(model2, my_testing2)
+table(pred2, my_testing2$survived)
+```
+
+
+```{r}
+(test.results3 <- cbind(pred2, my_testing2))
+```
+
+```{r}
+test.results3 <- test.results3 %>%
+  mutate(pred2 = as.numeric(pred2))
+pROC_obj <- roc(as.numeric(as.character(test.results3$survived)), test.results3$pred2,
+            smoothed = TRUE,
+            ci=TRUE, ci.alpha=0.9, stratified=FALSE,
+            plot=TRUE, auc.polygon=TRUE, max.auc.polygon=TRUE, grid=TRUE,
+            print.auc=TRUE, show.thres=TRUE)
+```
+
+
+
+
+
+# 3. Versuch 
+
+
+```{r}
+my_training3 <- training3 %>%
+  mutate(survived = as.factor(survived))%>%
+  mutate(sex = as.factor(sex))%>%
+  mutate(fare = as.factor(fare))%>%
+  mutate(pclass = as.factor(pclass)) 
+model3 <- naiveBayes(survived ~ ., data = my_training3)
+model3
+```
+
+```{r}
+my_testing3 <- testing3 %>%
+  mutate(sex = as.factor(sex)) %>%
+  mutate(fare = as.factor(fare))%>%
+  mutate(pclass = as.factor(pclass))
+pred3 <- predict(model3, my_testing3)
+table(pred3, my_testing3$survived)
+```
+
+
+```{r}
+(test.results5 <- cbind(pred3, my_testing3))
+```
+
+```{r}
+test.results5 <- test.results5 %>%
+  mutate(pred3 = as.numeric(pred3))
+pROC_obj <- roc(as.numeric(as.character(test.results5$survived)), test.results5$pred,
+            smoothed = TRUE,
+            ci=TRUE, ci.alpha=0.9, stratified=FALSE,
+            plot=TRUE, auc.polygon=TRUE, max.auc.polygon=TRUE, grid=TRUE,
+            print.auc=TRUE, show.thres=TRUE)
+```
+
+
+
+
+# Decision Tree
+
+# 1. Versuch
+
+```{r}
+library(rpart)
+library(rpart.plot)
+tree<- rpart(survived~., data = training, method = 'class')
+rpart.plot(tree)
+```
+```{r}
+dt_results <- predict(tree, testing[,-1], type = 'prob')
+head(model.results.dt <- cbind(testing,dt_results),500)
+```
+```{r}
+test.results2 <- test.results %>%
+  mutate(pred = ifelse(pred>=0.5,1,0))
+table(test.results2$pred, testing$survived)
+```
+
+
+```{r}
+pROC_obj <- roc(model.results.dt$survived,model.results.dt$`1`,
+            smoothed = TRUE,
+            # arguments for ci
+            ci=TRUE, ci.alpha=0.9, stratified=FALSE,
+            # arguments for plot
+            plot=TRUE, auc.polygon=TRUE, max.auc.polygon=TRUE, grid=TRUE,
+            print.auc=TRUE, show.thres=TRUE)
+```
+
+# 2.  Versuch
+
+
+```{r}
+tree2<- rpart(survived~., data = training2, method = 'class')
+rpart.plot(tree2)
+```
+
+```{r}
+dt_results2 <- predict(tree2, testing2[,-1], type = 'prob')
+head(model.results.dt2 <- cbind(testing2,dt_results2),500)
+```
+```{r}
+test.results4 <- test.results3 %>%
+  mutate(pred2 = ifelse(pred2>=0.5,1,0))
+table(test.results4$pred2, testing2$survived)
+```
+
+
+```{r}
+pROC_obj <- roc(model.results.dt2$survived,model.results.dt2$`1`,
+            smoothed = TRUE,
+            # arguments for ci
+            ci=TRUE, ci.alpha=0.9, stratified=FALSE,
+            # arguments for plot
+            plot=TRUE, auc.polygon=TRUE, max.auc.polygon=TRUE, grid=TRUE,
+            print.auc=TRUE, show.thres=TRUE)
+
+```
+
+
+# 3. Versuch
+
+
+```{r}
+tree3<- rpart(survived~., data = training3, method = 'class')
+rpart.plot(tree3)
+
+```
+
+
+```{r}
+dt_results3 <- predict(tree3, testing3[,-1], type = 'prob')
+head(model.results.dt3 <- cbind(testing3,dt_results3),500)
+```
+```{r}
+test.results6 <- test.results5 %>%
+  mutate(pred3 = ifelse(pred3>=0.5,1,0))
+table(test.results6$pred3, testing3$survived)
+```
+
+
+```{r}
+pROC_obj <- roc(model.results.dt3$survived,model.results.dt3$`1`,
+            smoothed = TRUE,
+            # arguments for ci
+            ci=TRUE, ci.alpha=0.9, stratified=FALSE,
+            # arguments for plot
+            plot=TRUE, auc.polygon=TRUE, max.auc.polygon=TRUE, grid=TRUE,
+            print.auc=TRUE, show.thres=TRUE)
+
+```
+
+# Was sind die Unterschiede in der Performance der Algorithmen?
+
+
+Bei allen drei Algorithmen handelt sich um Klassifizierung, doch was genau ist hier mit der Performance gemeint? Die Schnelligkeit mit der die Klassifizierung erfolgt? Oder wie häufig der Algorithmus trainiert werden muss? 
+
+Nach einer kurzen Recherche nehmen ich an, dass die Confusion Matrix ein guter Anhaltspunkt für die Performance sein könnte. So hoffe ich nun die Matrix auch korrekt zu lesen. Die Annahme von mir ist, dass 0 = No und 1 = Yes ist. 
+
+Bei allen drei Algorithmen wurden jeweils 209 Voraussagen getroffen. Ich habe Ihre Confusion Matrix hier verwendet, da hier zwei Variablen verwendet wurden ich hoffe dies ist okay. 
+
+Support Vector Machines:
+      0   1
+  0 106  42
+  1  22  39
+
+Beim SVM wurde 81 als "yes" vorhergesagt, davon sind aber nur 39 als "yes" bestätigt und als "yes" verhergesagt wurden, dass wäre die true positives. Die True negatives wären somit 106. Die false postives wären 42 und die false negatives wären 22. Insgesamt wurden 128 als "no" vorhergesagt, davon sind aber 106 als "no" bestätig und als "no" vorhergesagt.
+
+Naive Bayse: 
+ 
+      0  1
+   0 98 19
+   1 30 62
+   
+Beim Naive Bayse wurden auch 81 als "yes" vorhergesagt, davon sind 62 als "yes" bestätigt und als "yes" verhergesagt wurden, dass wäre die true positives. Die True negatives wären somit 98. Die false postives wären 19 und die false negatives wären 30. Insgesamt wurden 128 als "no" vorhergesagt, davon sind aber 98 als "no" bestätig und als "no" vorhergesagt. Da hier die Zahl der false negatives mit 30 höher ist, und es "schlimmer" ist etwas nicht zu sehen, was da ist, könnte man annehmen, dass Naive Bayse eine "schlechterer" Performance hat als SVM. Allerdings bezieht Naive Bayse bedingte Wahrscheinlichkeiten ein, also könnte dies wieder für Naive Bayse sprechen. 
+
+Decision Tree: 
+      0   1
+  1 128  81
+
+Hier fällt auf, dass wohl die letzte Zeile abhanden gekommen ist, bzw. nicht ausgegeben wird. Woran liegt das? Dies lässt mich darauf schließen, dass zwar hier eine "schöne" Darstellung der Ergebnisse möglich, allerdings die Performance nicht gut ist. Da hier nur die insgesamten Vorhersagen für "no" und "yes" aufgezeigt werden. Ist hier die Frage wo man die false negatives und true positves herbekommt. 
+
+
+Zudem unterscheinden sich die Abstände zum AUC bei SVM und Naive Bayse. 
+
+# Finden Sie Erklärungen dafür.
+
+Vermutung: 
+Beim SVM und Naive Bayse werden die Ergebnisse für "yes" und "no" noch mal mit einer Umkehrrechnung bestätigt. Das könnte die Erklärung sein, das der Decision Tree keine zweite Zeile hat. 
+
+Beim AUC könnte man vermuten, dass Naive Bayse einzelne Schritte durchläuft bzw. mehrere Confusion Matrix für die einzlenen Datenpunkte erstellt und der SVM nur eine aus den gesamten Datenpunkten erstellt. 
+
+
+# Versuche 
+
+
+
+```{r}
+titanic %>%
+  group_by(embarked) %>%
+  summarize(n = n())
+```
+
+
+```{r}
+(titanic.df <- titanic %>%
+    select(survived,pclass,age,embarked))
+```
+
+```{r}
+titanic.df <- titanic.df %>%
+  mutate(age = as.numeric(str_replace(age,",",".")))
+```
+
+```{r}
+titanic.df <- na.omit(titanic.df)
+```
+
+```{r}
+set.seed(107)
+inTrain <- createDataPartition(
+  y = titanic.df$survived,
+  p = .8,
+  list = FALSE)
+training <- titanic.df[ inTrain,]
+testing  <- titanic.df[-inTrain,]
+```
+
+```{r}
+model <- svm(survived ~ ., data = training)
+summary(model)
+pred <- predict(model, testing[,-1], probability = FALSE)
+```
+
+```{r}
+(test.results <- cbind(pred, testing))
+```
+
+```{r}
+test.results2 <- test.results %>%
+  mutate(pred = ifelse(pred>=0.5,1,0))
+table(test.results2$pred, testing$survived)
+```
+
+
+```{r}
+pROC_obj <- roc(test.results$survived, test.results$pred,
+                smoothed = TRUE,
+                ci=TRUE, ci.alpha=0.9, stratified=FALSE,
+                plot=TRUE, auc.polygon=TRUE, max.auc.polygon=TRUE, grid=TRUE,
+                print.auc=TRUE, show.thres=TRUE)
+```
+
+# Mit mehr als zwei Features
+
+```{r}
+(titanic.df <- titanic %>%
+    select(survived,pclass,sex,age,embarked))
+```
+
+```{r}
+titanic.df <- titanic.df %>%
+  mutate(age = as.numeric(str_replace(age,",",".")))
+```
+
+```{r}
+titanic.df <- na.omit(titanic.df)
+```
+
+```{r}
+titanic.df <- titanic.df %>%
+  mutate(sex = ifelse(sex == "female", 1, 0))
+```
+
+```{r}
+set.seed(107)
+inTrain <- createDataPartition(
+  y = titanic.df$survived,
+  p = .8,
+  list = FALSE)
+training <- titanic.df[ inTrain,]
+testing  <- titanic.df[-inTrain,]
+```
+
+```{r}
+model <- svm(survived ~ ., data = training)
+summary(model)
+pred <- predict(model, testing[,-1], probability = FALSE)
+```
+
+```{r}
+(test.results <- cbind(pred, testing))
+```
+
+
+```{r}
+library(pROC)
+pROC_obj <- roc(test.results$survived, test.results$pred,
+                smoothed = TRUE,
+                ci=TRUE, ci.alpha=0.9, stratified=FALSE,
+                plot=TRUE, auc.polygon=TRUE, max.auc.polygon=TRUE, grid=TRUE,
+                print.auc=TRUE, show.thres=TRUE)
+```
+
+# Naive Bayes
+
+```{r}
+my_training <- training %>%
+  mutate(survived = as.factor(survived))%>%
+  mutate(sex = as.factor(sex))%>%
+  mutate(pclass = as.factor(pclass)) %>%
+  mutate(age = as.factor(age))
+model <- naiveBayes(survived ~ ., data = my_training)
+model
+```
+
+```{r}
+my_testing <- testing %>%
+  mutate(sex = as.factor(sex)) %>%
+  mutate(pclass = as.factor(pclass))%>%
+  mutate(age = as.factor(age)) %>%
+  mutate(embarked = as.factor(embarked))
+pred <- predict(model, my_testing)
+table(pred, my_testing$survived)
+```
+
+
+```{r}
+(test.results <- cbind(pred, my_testing))
+```
+
+```{r}
+test.results <- test.results %>%
+  mutate(pred = as.numeric(pred))
+pROC_obj <- roc(as.numeric(as.character(test.results$survived)), test.results$pred,
+                smoothed = TRUE,
+                ci=TRUE, ci.alpha=0.9, stratified=FALSE,
+                plot=TRUE, auc.polygon=TRUE, max.auc.polygon=TRUE, grid=TRUE,
+                print.auc=TRUE, show.thres=TRUE)
+```
+# Decision Tree
+
+```{r}
+library(rpart)
+library(rpart.plot)
+tree<- rpart(survived~., data = training, method = 'class')
+rpart.plot(tree)
+```
+```{r}
+dt_results <- predict(tree, testing[,-1], type = 'prob')
+head(model.results.dt <- cbind(testing,dt_results),500)
+```
+```{r}
+test.results2 <- test.results %>%
+  mutate(pred = ifelse(pred>=0.5,1,0))
+table(test.results2$pred, testing$survived)
+```
+
+
+```{r}
+pROC_obj <- roc(model.results.dt$survived,model.results.dt$`1`,
+                smoothed = TRUE,
+                # arguments for ci
+                ci=TRUE, ci.alpha=0.9, stratified=FALSE,
+                # arguments for plot
+                plot=TRUE, auc.polygon=TRUE, max.auc.polygon=TRUE, grid=TRUE,
+                print.auc=TRUE, show.thres=TRUE)
+```
+
+
+
